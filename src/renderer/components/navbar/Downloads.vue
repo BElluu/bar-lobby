@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT
 <template>
     <PopOutPanel :open="modelValue">
         <Transition name="fade" mode="out-in">
-            <div v-if="downloadsStore.mapDownloads.length" class="downloads">
+            <div v-if="allDownloads.length" class="downloads">
                 <TransitionGroup tag="div" name="downloads-list">
                     <div v-for="(download, i) in limitedList" :key="i" class="downloads__download">
                         <div class="downloads__info">
@@ -27,8 +27,8 @@ SPDX-License-Identifier: MIT
                     </div>
                 </TransitionGroup>
                 <Transition tag="div" name="fade" mode="out-in">
-                    <div class="flex-row flex-grow flex-center" v-if="downloadsStore.mapDownloads.length > limitedList.length">
-                        {{ t("lobby.navbar.downloads.moreDownloads", { count: downloadsStore.mapDownloads.length - limitedList.length }) }}
+                    <div class="flex-row flex-grow flex-center" v-if="allDownloads.length > limitedList.length">
+                        {{ t("lobby.navbar.downloads.moreDownloads", { count: allDownloads.length - limitedList.length }) }}
                     </div>
                 </Transition>
             </div>
@@ -59,7 +59,13 @@ const toggleMessages = inject<Ref<(open?: boolean, userId?: number) => void>>("t
 const toggleFriends = inject<Ref<(open?: boolean) => void>>("toggleFriends")!;
 const toggleDownloads = inject<Ref<(open?: boolean) => void>>("toggleDownloads")!;
 
-const limitedList = computed(() => downloadsStore.mapDownloads.slice(0, 5));
+const allDownloads = computed(() => [
+    ...downloadsStore.engineDownloads,
+    ...downloadsStore.gameDownloads,
+    ...downloadsStore.mapDownloads,
+]);
+
+const limitedList = computed(() => allDownloads.value.slice(0, 5));
 
 toggleDownloads.value = async (open?: boolean) => {
     if (open) {

@@ -43,11 +43,14 @@ SPDX-License-Identifier: MIT
                     v-if="matchmakingStore.status === MatchmakingStatus.Idle"
                     class="quick-play-button"
                     :class="{
-                        disabled: !matchmakingStore.selectedQueue,
+                        disabled: !matchmakingStore.selectedQueue || matchmakingStore.downloadsRequired[matchmakingStore.selectedQueue]?.needed,
                     }"
                     @click="matchmaking.sendQueueRequest"
                 >
-                    {{ t("lobby.multiplayer.ranked.buttons.searchGame") }}
+                    <span v-if="matchmakingStore.downloadsRequired[matchmakingStore.selectedQueue]?.needed">
+                        {{ t("lobby.multiplayer.ranked.buttons.downloadingAssets") }}
+                    </span>
+                    <span v-else>{{ t("lobby.multiplayer.ranked.buttons.searchGame") }}</span>
                 </button>
                 <button
                     v-else-if="matchmakingStore.status === MatchmakingStatus.JoinRequested"

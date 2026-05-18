@@ -12,7 +12,6 @@ import {
     MatchmakingQueueUpdateEventData,
 } from "tachyon-protocol/types";
 import { tachyonStore } from "@renderer/store/tachyon.store";
-import { db } from "@renderer/store/db";
 import { notificationsApi } from "@renderer/api/notifications";
 
 export enum MatchmakingStatus {
@@ -104,9 +103,9 @@ async function sendListRequest() {
         }
         // Clear the "downloadsRequired" list because we have all-new playlist response
         matchmakingStore.downloadsRequired = {};
-        // Find out of we have the necessary maps for each queue we've been given.
+        // Check required assets for each queue and kick off downloads for any that are missing.
         matchmakingStore.playlists.forEach(async (queue) => {
-            matchmakingStore.downloadsRequired[queue.id] = { needed: await checkIfAnyMapsAreNeeded(queue.maps) };
+            matchmakingStore.downloadsRequired[queue.id] = { needed: await checkAndDownloadMissingAssets(queue) };
         });
     } catch (error) {
         console.error("Tachyon error: matchmaking/list:", error);
@@ -117,14 +116,33 @@ async function sendListRequest() {
     }
 }
 
-async function checkIfAnyMapsAreNeeded(maps: { springName: string }[]): Promise<boolean> {
-    if (maps.length == 0) return false;
-    const queueMaps = maps.map((m) => m.springName);
-    const dbMaps = await db.maps.bulkGet(queueMaps);
-    for (const map of dbMaps) {
-        if (map == undefined || !map.isInstalled) return true;
+type QueueAssets = Pick<MatchmakingListOkResponseData["playlists"][number], "engines" | "games" | "maps">;
+
+async function checkAndDownloadMissingAssets(queue: QueueAssets): Promise<boolean> {
+    let anyMissing = false;
+
+    for (const { version } of queue.engines) {
+        if (!(await window.engine.isVersionInstalled(version))) {
+            anyMissing = true;
+            window.engine.downloadEngine(version).catch((err) => console.error("Failed to download engine:", version, err));
+        }
     }
-    return false;
+
+    for (const { springName } of queue.games) {
+        if (!(await window.game.isVersionInstalled(springName))) {
+            anyMissing = true;
+            window.game.downloadGame(springName).catch((err) => console.error("Failed to download game:", springName, err));
+        }
+    }
+
+    for (const { springName } of queue.maps) {
+        if (!(await window.maps.isVersionInstalled(springName))) {
+            anyMissing = true;
+            window.maps.downloadMap(springName).catch((err) => console.error("Failed to download map:", springName, err));
+        }
+    }
+
+    return anyMissing;
 }
 
 export function getPlaylistName(id: string): string {
@@ -186,6 +204,12 @@ async function sendReadyRequest() {
     }
 }
 
+async function refreshDownloadsRequired() {
+    for (const queue of matchmakingStore.playlists) {
+        matchmakingStore.downloadsRequired[queue.id] = { needed: await checkAndDownloadMissingAssets(queue) };
+    }
+}
+
 export async function initializeMatchmakingStore() {
     if (matchmakingStore.isInitialized) return;
 
@@ -200,6 +224,10 @@ export async function initializeMatchmakingStore() {
     window.tachyon.onEvent("matchmaking/found", onFoundEvent);
 
     window.tachyon.onEvent("matchmaking/queuesJoined", onQueuesJoinedEvent);
+
+    window.downloads.onDownloadEngineComplete(() => refreshDownloadsRequired());
+    window.downloads.onDownloadGameComplete(() => refreshDownloadsRequired());
+    window.downloads.onDownloadMapComplete(() => refreshDownloadsRequired());
 
     if (tachyonStore.isConnected) {
         await sendListRequest();
