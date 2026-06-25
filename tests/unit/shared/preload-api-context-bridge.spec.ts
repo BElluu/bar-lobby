@@ -14,7 +14,25 @@ type MockIpcRenderer = {
 
 describe("Preload API Context Bridge", () => {
     // List of all APIs exposed in the preload script
-    const apiNames = ["log", "info", "mainWindow", "shell", "replays", "settings", "auth", "engine", "game", "maps", "downloads", "misc", "barNavigation", "tachyon", "autoUpdater", "notifications"];
+    const apiNames = [
+        "log",
+        "info",
+        "mainWindow",
+        "shell",
+        "replays",
+        "settings",
+        "auth",
+        "engine",
+        "game",
+        "maps",
+        "downloads",
+        "misc",
+        "barNavigation",
+        "tachyon",
+        "autoUpdater",
+        "notifications",
+        "lobbyProtocol",
+    ];
 
     let mockWindow: any;
     let mockIpcRenderer: MockIpcRenderer;
@@ -289,5 +307,19 @@ describe("Preload API Context Bridge", () => {
     it("should expose notifications API", async () => {
         await import("@preload/preload");
         expect(typeof mockWindow.notifications.onShowAlert).toBe("function");
+    });
+
+    it("should expose lobby protocol API", async () => {
+        await import("@preload/preload");
+
+        mockWindow.lobbyProtocol.getLabels();
+        mockWindow.lobbyProtocol.handlePending();
+        mockWindow.lobbyProtocol.handleUrl("barrts://internal/ping");
+
+        expect(mockWindow.lobbyProtocol.scheme).toBe("barrts");
+        expect(mockWindow.lobbyProtocol.getShareableUrl("internal", "ping", { id: "555" })).toBe("http://localhost:47777/internal/ping?id=555");
+        expect(mockIpcRenderer.invoke).toHaveBeenCalledWith("lobbyProtocol:getLabels");
+        expect(mockIpcRenderer.invoke).toHaveBeenCalledWith("lobbyProtocol:handlePending");
+        expect(mockIpcRenderer.invoke).toHaveBeenCalledWith("lobbyProtocol:handleUrl", "barrts://internal/ping");
     });
 });

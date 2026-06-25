@@ -5,7 +5,6 @@
 import http from "node:http";
 import { buildLobbyProtocolUrl } from "@main/lobbyProtocol/lobby-protocol-router";
 import { logger } from "@main/utils/logger";
-import { lobbyProtocolLaunchService } from "./lobby-protocol-launch.service";
 
 const log = logger("lobby-http-bridge.service.ts");
 
@@ -17,12 +16,35 @@ function buildOpenHtml(protocolUrl: string): string {
 <html>
 <head>
   <title>Opening BAR Lobby...</title>
+  <script>
+    const protocolUrl = ${JSON.stringify(protocolUrl)};
+    function openLobby() {
+      window.location.href = protocolUrl;
+    }
+    window.addEventListener("DOMContentLoaded", () => {
+      window.setTimeout(openLobby, 100);
+    });
+  </script>
 </head>
 <body>
   <p>Opening BAR Lobby...</p>
-  <p>If the app did not open, <a href="${escaped}">click here</a>.</p>
+  <button type="button" onclick="openLobby()">Open BAR Lobby</button>
+  <p>If the app did not open automatically, <a href="${escaped}">click here</a>.</p>
 </body>
 </html>`;
+}
+
+function getProtocolRoute(pathname: string): { handler: string; action: string } | null {
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length === 2) {
+        const [handler, action] = segments;
+        return { handler, action };
+    }
+    if (segments.length === 3 && segments[0] === "run") {
+        const [, handler, action] = segments;
+        return { handler, action };
+    }
+    return null;
 }
 
 let server: http.Server | null = null;
@@ -43,15 +65,13 @@ function init(): Promise<void> {
                 return;
             }
 
-            const segments = parsedUrl.pathname.split("/").filter(Boolean);
-            if (segments.length !== 3 || segments[0] !== "run") {
+            const route = getProtocolRoute(parsedUrl.pathname);
+            if (!route) {
                 res.writeHead(404).end("Not found");
                 return;
             }
 
-            const [, handler, action] = segments;
-            const protocolUrl = buildLobbyProtocolUrl(handler, action, parsedUrl.search);
-            void lobbyProtocolLaunchService.openExternal(protocolUrl);
+            const protocolUrl = buildLobbyProtocolUrl(route.handler, route.action, parsedUrl.search);
 
             res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
             res.end(buildOpenHtml(protocolUrl));
